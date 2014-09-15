@@ -36,7 +36,7 @@ window.APP = new Vue({
   },
 
   ready: function() {
-    this.initEditor();
+    //this.initEditor();
     this.initUserMedia();
 
     $("input").focus();
