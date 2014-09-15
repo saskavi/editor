@@ -10,17 +10,22 @@
 </head>
 <script src="./lib/codemirror/codemirror.js"></script>
 <script src="./lib/codemirror/mode/javascript/javascript.js"></script>
-<!--
+
 <script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.8/jquery.min.js"></script>
 <script type="text/javascript" src="http://cdn.peerjs.com/0.3/peer.js"></script>
- -->
+
 <body>
 
     <div id="app">
-        <input v-model='channel' placeholder='#channel name'>
+        <input v-model='channel' placeholder='#channel name' v-on="keyup:startCall() | key enter">
+        <video class="local-video"></video>
+        <video class="remote-video"></video>
     </div>
 
-    <script src="index.js"></script>
 
-</body>
-</html>
+
+
+            <script src="index.js"></script>
+
+        </body>
+        </html>

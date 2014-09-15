@@ -18,14 +18,14 @@ function getIceServers(cb) {
       cb(null, data.d);
       console.log("Data: " + data + "nnStatus: " + status);
     });
-};
+}
 
 
 
-window.Application = Vue.extend({
-
+window.APP = new Vue({
+  el: "#app",
   data: {
-    userid: uuid.v4(),
+    userid: window.location.search.substr(1),
     channel: "channel",
     connections: {},
     userMediaConfig: {
@@ -37,14 +37,15 @@ window.Application = Vue.extend({
 
   ready: function() {
 
-    var self = this;
-
     $("input").focus();
+
+    this.initEditor();
 
     getIceServers(function(err, rtcConfig) {
       this.rtcConfig = rtcConfig;
-      self.initConnection();
-    });
+      this.initConnection();
+
+    }.bind(this));
 
 
   },
@@ -59,15 +60,16 @@ window.Application = Vue.extend({
       });
     },
 
-    initUserMedia: function() {
-      var self = this;
+    initUserMedia: function(cb) {
+
       navigator.getUserMedia(this.userMediaConfig,
         function(stream) {
-          self.localStream = stream;
-          $(self.$el).find('.local-video').prop('src', URL.createObjectURL(stream));
+          this.localStream = stream;
+          $(this.$el).find('.local-video').prop('src', URL.createObjectURL(stream));
+          cb(stream);
         },
         function(err) {
-          console.log("Error", err)
+          console.log("Error", err);
         }
       );
     },
@@ -77,7 +79,7 @@ window.Application = Vue.extend({
       var self = this;
 
       console.log(this.uid, this.rtcConfig);
-      this.peer = new Peer(this.uid, {
+      this.peer = new Peer(this.userid, {
         host: 'p2p.saskavi.com',
         port: 9000,
         key: 'saskavi',
@@ -92,7 +94,7 @@ window.Application = Vue.extend({
       });
 
       this.peer.on('call', function(call) {
-        console.log("incoming call", call)
+        console.log("incoming call", call);
         call.answer(self.localStream);
         call.on('stream', function(remoteStream) {
           $(self.$el).find('.remote-video').prop('src', URL.createObjectURL(remoteStream));
@@ -106,15 +108,23 @@ window.Application = Vue.extend({
 
 
     startCall: function() {
-      this.initUserMedia();
+      var self = this;
+      var targetid = this.channel;
 
-      this.call = peer.call(userid, this.localStream);
-      this.call.on('stream', function(stream) {
-        $(this.$el).find('.remote-video').prop('src', URL.createObjectURL(stream));
+      self.initUserMedia(function(localStream) {
+
+        self.call = self.peer.call(targetid, localStream);
+        console.log("CALL", self.call);
+        self.call.on('stream', function(stream) {
+          $(self.$el).find('.remote-video').prop('src', URL.createObjectURL(stream));
+        });
+        self.call.on('close', function() {
+          console.log('call closed');
+        });
+
       });
-      this.call.on('close', function() {
-        console.log('call closed');
-      });
+
+
     }
 
   }
