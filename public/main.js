@@ -36,18 +36,16 @@ window.APP = new Vue({
   },
 
   ready: function() {
+    this.initEditor();
+    this.initUserMedia();
 
     $("input").focus();
 
-    this.initEditor();
-
+    var self = this;
     getIceServers(function(err, rtcConfig) {
-      this.rtcConfig = rtcConfig;
-      this.initConnection();
-
-    }.bind(this));
-
-
+      self.rtcConfig = rtcConfig;
+      self.initConnection();
+    });
   },
 
   methods: {
@@ -61,17 +59,35 @@ window.APP = new Vue({
     },
 
     initUserMedia: function(cb) {
+      // navigator.getUserMedia(this.userMediaConfig,
+      //   function(stream) {
+      //     this.localStream = stream;
+      //     $('.local-video').prop('src', URL.createObjectURL(stream));
+      //     if (cb)
+      //       cb(stream);
+      //   },
+      //   function(err) {
+      //     console.log("Error", err);
+      //   }
+      // );
 
-      navigator.getUserMedia(this.userMediaConfig,
-        function(stream) {
-          this.localStream = stream;
-          $(this.$el).find('.local-video').prop('src', URL.createObjectURL(stream));
-          cb(stream);
-        },
-        function(err) {
-          console.log("Error", err);
-        }
-      );
+      navigator.getUserMedia({
+        video: true,
+        audio: true
+      }, function(localMediaStream) {
+        var video = document.querySelector('.local-video');
+        video.src = window.URL.createObjectURL(localMediaStream);
+
+        // Note: onloadedmetadata doesn't fire in Chrome when using it with getUserMedia.
+        // See crbug.com/110938.
+        video.onloadedmetadata = function(e) {
+          // Ready to go. Do some stuff.
+        };
+      }, function(err) {
+        console.log(err);
+      });
+
+
     },
 
     initConnection: function() {
@@ -97,7 +113,7 @@ window.APP = new Vue({
         console.log("incoming call", call);
         call.answer(self.localStream);
         call.on('stream', function(remoteStream) {
-          $(self.$el).find('.remote-video').prop('src', URL.createObjectURL(remoteStream));
+          $('.remote-video').prop('src', URL.createObjectURL(remoteStream));
         });
       });
 
@@ -111,18 +127,16 @@ window.APP = new Vue({
       var self = this;
       var targetid = this.channel;
 
-      self.initUserMedia(function(localStream) {
-
-        self.call = self.peer.call(targetid, localStream);
-        console.log("CALL", self.call);
-        self.call.on('stream', function(stream) {
-          $(self.$el).find('.remote-video').prop('src', URL.createObjectURL(stream));
-        });
-        self.call.on('close', function() {
-          console.log('call closed');
-        });
-
+      self.call = self.peer.call(targetid, self.localStream);
+      console.log("CALL", self.call);
+      self.call.on('stream', function(stream) {
+        $(self.$el).find('.remote-video').prop('src', URL.createObjectURL(stream));
       });
+      self.call.on('close', function() {
+        console.log('call closed');
+      });
+
+      ;
 
 
     }
