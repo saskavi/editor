@@ -9,6 +9,6 @@ module.exports = React.createClass({
     },
 
     render: function() {
-        return <video ref="video" style={{top: (this.props.index * 200) + "px" }} src={this.props.stream}/>;
+        return <video className={this.props.self ? "self-video" : ""} ref="video" style={{top: (this.props.index * 200) + "px" }} src={this.props.stream}/>;
     }
 });

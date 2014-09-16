@@ -4,10 +4,19 @@ var request = require('superagent');
 var React = require('react');
 var CodeMirror = require('code-mirror/mode/htmlmixed');
 
+var RB = require('react-bootstrap');
+
 var Camera = require('./Camera');
 
-var makePeer = function() {
-    var peer = window.peer = new Peer({
+var Button = RB.Button,
+    Input = RB.Input,
+    Grid = RB.Grid,
+    Row = RB.Row,
+    Col = RB.Col;
+
+
+var makePeer = function(name) {
+    var peer = window.peer = new Peer(name, {
         host: 'p2p.saskavi.com',
         port: 9000,
         key: 'saskavi',
@@ -67,21 +76,25 @@ var Editor = React.createClass({
 });
 
 
+
+
 var Workspace = React.createClass({
     getInitialState: function() {
         return {
+            'localStream': null,
             'streams': [],
             'peer': null,
-            'conns': []
+            'conns': [],
+            'name': ''
         };
     },
 
     componentDidMount: function() {
         var self = this;
         getMediaStream(function(err, stream) {
-            var peer = makePeer();
+            var peer = makePeer(self.state.name);
             window.peer = peer;
-            self.setState({streams: self.state.streams.concat([stream]), 'peer': peer});
+            self.setState({localStream: stream, 'peer': peer});
 
             peer.on('call', function(call) {
                 call.answer(localstream);
@@ -93,9 +106,32 @@ var Workspace = React.createClass({
         });
     },
 
+    onKey: function(e) {
+        var k = e.keyCode || e.which;
+        if (k === 13) {
+            this.setState({name: this.refs.name.getValue()});
+        }
+    },
+
   render: function() {
-      if (this.state.streams.length === 0) {
-          return <h1>Initializing ...</h1> ;
+      if (this.state.localStream === 0) {
+          return ( <h1>Initializing...</h1> );
+      }
+
+      if (this.state.name.length === 0) {
+          return (
+              <Grid>
+                  <Row>
+                      <Col xs={6} xsOffset={3}>
+                          <Input type="text"
+                              ref="name"
+                              style={{marginTop: "50px", textAlign: 'center'}}
+                              onKeyPress={this.onKey}
+                              placeholder="what's your name?" className="form-control" autoFocus />
+                      </Col>
+                  </Row>
+              </Grid>
+          );
       }
 
       var cameras = this.state.streams.map(function(s, i) {
@@ -105,6 +141,7 @@ var Workspace = React.createClass({
       return <div>
           <Editor/>
           { cameras }
+          <Camera stream={this.state.localStream} self={true} />
       </div> ;
   }
 });

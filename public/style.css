@@ -20,3 +20,10 @@ video {
   width: 200px;
   height: 200px;
 }
+
+.self-video {
+    top: auto;
+    bottom: 10px;
+    width: 100px;
+    height: 100px;
+}
