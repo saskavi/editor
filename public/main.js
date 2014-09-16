@@ -14,14 +14,41 @@ var Button = RB.Button,
     Row = RB.Row,
     Col = RB.Col;
 
+// Call XirSys ICE servers
+var $ = require('jquery');
 
-var makePeer = function(name) {
+var getNetConfig = function(cb) {
+    $.ajax({
+        type: "POST",
+        dataType: "json",
+        url: "https://api.xirsys.com/getIceServers",
+        data: {
+            ident: "hansent",
+            secret: "5ce59fc8-8f88-4af0-96d9-64c263aecdbf",
+            domain: "saskavi.com",
+            application: "default",
+            room: "default",
+            secure: 1
+        },
+        success: function(data, status) {
+            // data.d is where the iceServers object lives
+            cb(null, data.d);
+        },
+        async: false
+    });
+};
+
+
+
+var makePeer = function(name, config) {
+    console.log("Connecting with config:", config);
     var peer = window.peer = new Peer(name, {
         host: 'p2p.saskavi.com',
         port: 9000,
         key: 'saskavi',
+        path: "/",
         debug: 3,
-        config: customConfig
+        config: config
     });
 
     return peer;
@@ -38,8 +65,7 @@ function getMediaStream(callback) {
         audio: true
       },
       function(localMediaStream) {
-        callback(null, window.URL.createObjectURL(localMediaStream));
-
+        callback(null, localMediaStream);
       },
       function(err) {
         console.log("The following error occured: " + err);
@@ -91,19 +117,31 @@ var Workspace = React.createClass({
 
     componentDidMount: function() {
         var self = this;
-        getMediaStream(function(err, stream) {
-            var peer = makePeer(self.state.name);
-            window.peer = peer;
-            self.setState({localStream: stream, 'peer': peer});
+        getNetConfig(function(err, config) {
+            getMediaStream(function(err, stream) {
+                var peer = makePeer(self.state.name, config);
+                window.peer = peer;
+                self.setState({localStream: stream, 'peer': peer});
 
-            peer.on('call', function(call) {
-                call.answer(localstream);
-                call.on('stream', function(stream) {
-                    console.log("got stream");
-                    self.setState({streams: self.state.streams.concat([stream])});
+                peer.on('open', function(id) {
+                    console.log(id);
+                });
+
+                peer.on('call', function(call) {
+                    console.log("GOT CALL", call);
+                    console.log("STREAM", stream);
+                    call.answer(stream);
+                    call.on('stream', function(s) {
+                        console.log("GOT RESPONSE STREAM", s);
+                        self.addStream(s);
+                    });
                 });
             });
         });
+    },
+
+    addStream: function(s) {
+        this.setState({streams: this.state.streams.concat([s])});
     },
 
     onKey: function(e) {
@@ -112,6 +150,21 @@ var Workspace = React.createClass({
             this.setState({name: this.refs.name.getValue()});
         }
     },
+
+    onKeyWho: function(e) {
+        var k = e.keyCode || e.which;
+        var self = this;
+
+        if (k === 13) {
+            var name = this.refs.name.getValue();
+            var call = this.state.peer.call(name, this.state.localStream);
+
+            call.on('stream', function(s) {
+                self.addStream(s);
+            });
+        }
+    },
+
 
   render: function() {
       if (this.state.localStream === 0) {
@@ -141,53 +194,17 @@ var Workspace = React.createClass({
       return <div>
           <Editor/>
           { cameras }
+          <div className="call-who">
+              <Input type="text"
+                  ref="name"
+                  style={{marginTop: "10px", textAlign: 'center'}}
+                  onKeyPress={this.onKeyWho}
+                  placeholder="call who?" className="form-control" autoFocus />
+          </div>
+
           <Camera stream={this.state.localStream} self={true} />
       </div> ;
   }
 });
 
-
-
 React.renderComponent(<Workspace></Workspace>, document.body);
-
-
-
-var $ = require('jquery');
-
-
-
-// Call XirSys ICE servers
-$.ajax({
-  type: "POST",
-  dataType: "json",
-  url: "https://api.xirsys.com/getIceServers",
-  data: {
-    ident: "hansent",
-    secret: "5ce59fc8-8f88-4af0-96d9-64c263aecdbf",
-    domain: "saskavi.com",
-    application: "default",
-    room: "default",
-    secure: 1
-  },
-  success: function(data, status) {
-    // data.d is where the iceServers object lives
-    customConfig = data.d;
-    console.log(customConfig);
-  },
-  async: false
-});
-
-
-window.peer = new Peer({
-  host: 'p2p.saskavi.com',
-  port: 9000,
-  key: 'saskavi',
-  debug: 3,
-  config: customConfig
-});
-
-peer.on('connection', function(conn) {
-  conn.on('data', function(data) {
-    console.log("RCV", data);
-  });
-});

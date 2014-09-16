@@ -21,6 +21,12 @@ video {
   height: 200px;
 }
 
+.call-who {
+    position: absolute;
+    right: 10px;
+    top: 10px;
+}
+
 .self-video {
     top: auto;
     bottom: 10px;

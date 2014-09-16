@@ -26,7 +26,6 @@ gulp.task('default', ['build'], function() {
         ghostMode: false,
         reloadDelay: 200,
         notify: false,
-        https: true,
         server: {
             baseDir: './build',
         },
