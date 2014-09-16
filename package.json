@@ -9,6 +9,9 @@
   "dependencies": {
     "code-mirror": "^3.22.0",
     "peer": "^0.2.7",
+    "peerjs": "^0.3.10",
+    "react": "^0.11.1",
+    "reactify": "^0.14.0",
     "webrtc.io": "0.0.4"
   },
   "devDependencies": {

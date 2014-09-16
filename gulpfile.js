@@ -1,5 +1,3 @@
-'use strict';
-
 var gulp = require('gulp');
 var source = require('vinyl-source-stream');
 var browserify = require('browserify');
@@ -11,11 +9,35 @@ var autoprefixer = require('gulp-autoprefixer');
 var rimraf = require('gulp-rimraf');
 var notify = require('gulp-notify');
 var browserSync = require('browser-sync');
+var reactify = require('reactify');
 
 
 
 // default task /////////////////////////////////////////////////
-gulp.task('default', ['build', 'browser-sync', 'watch']);
+gulp.task('default', ['build'], function() {
+
+    gulp.src('public/lib/**/*')
+        .pipe(gulp.dest('build/lib'));
+
+    browserSync({
+        tunnel: true,
+        open: false,
+        files: ['./build/**/*', '!./build/lib/**/*'],
+        ghostMode: false,
+        reloadDelay: 200,
+        notify: false,
+        https: true,
+        server: {
+            baseDir: './build',
+        },
+    });
+
+    gulp.watch('public/**/*.js', ['browserify']);
+    gulp.watch('public/**/*.html', ['assets']);
+    gulp.watch('public/**/*.css', ['css']);
+    gulp.watch('public/**/*.less', ['less']);
+    gulp.watch('public/img/**/*', ['images']);
+});
 
 gulp.task('clean', function() {
     return gulp.src(['build/**/*'], {
@@ -26,18 +48,21 @@ gulp.task('clean', function() {
 
 
 // build tasks //////////////////////////////////////////////////
-gulp.task('build', ['css', 'html', 'images', 'browserify']);
+gulp.task('build', ['css', 'assets', 'images', 'browserify']);
 
 gulp.task('browserify', function() {
     var environ = {
         NODE_ENV: process.env.NODE_ENV
     };
     return browserify('./public/main.js')
+        .require('react')
         .transform(envify(environ))
         .transform(partialify)
-        .bundle({
-            debug: process.env.NODE_ENV != 'production'
-        })
+        .transform(reactify)
+
+    .bundle({
+        debug: process.env.NODE_ENV != 'production'
+    })
         .on('error', function(err) {
             notify.onError('Error: <%= error.message %>')(err);
             this.end();
@@ -49,17 +74,14 @@ gulp.task('browserify', function() {
 
 
 // assets //////////////////////////////////////////////////////
-gulp.task('html', function() {
-    gulp.src('./public/**/*.html')
+gulp.task('assets', function() {
+    gulp.src(['./public/**/*.html', '!./public/lib/**/*'])
         .pipe(gulp.dest('build/'));
-
-    gulp.src('public/img/**/*')
-        .pipe(gulp.dest('build/img'));
 });
 
 
 gulp.task('css', function() {
-    return gulp.src('public/**/*.css')
+    return gulp.src(['public/**/*.css', '!./public/lib/**/*'])
         .pipe(autoprefixer('last 1 version'))
         .pipe(gulp.dest('./build'))
 });
@@ -85,26 +107,4 @@ gulp.task('images', ['favicon'], function() {
 gulp.task('favicon', function() {
     return gulp.src('public/img/favicon.ico')
         .pipe(gulp.dest('build/'));
-});
-
-
-
-// file watching & rebuild/reload on change ////////////////////
-gulp.task('watch', function() {
-    gulp.watch('public/**/*.js', ['browserify']);
-    gulp.watch('public/**/*.html', ['html']);
-    gulp.watch('public/**/*.css', ['css']);
-    gulp.watch('public/**/*.less', ['less']);
-    gulp.watch('public/img/**/*', ['images']);
-});
-
-gulp.task('browser-sync', function() {
-    browserSync({
-        tunnel: true,
-        open: 'local',
-        files: './build/**/*',
-        server: {
-            baseDir: './build',
-        },
-    });
 });
