@@ -1,146 +1,189 @@
-var uuid = require('uuid');
-var Vue = require('vue');
+/** @jsx React.DOM */
+
+var React = require('react');
+var RB = require('react-bootstrap');
+
+var Camera = require('./ui/camera');
+var Editor = require('./ui/editor');
+
+var Button = RB.Button,
+  Input = RB.Input,
+  Grid = RB.Grid,
+  Row = RB.Row,
+  Col = RB.Col;
+
+// Call XirSys ICE servers
 var $ = require('jquery');
 
-navigator.getUserMedia = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia;
-
-
-function getIceServers(cb) {
-  $.post("https://api.xirsys.com/getIceServers", {
+var getNetConfig = function(cb) {
+  $.ajax({
+    type: "POST",
+    dataType: "json",
+    url: "https://api.xirsys.com/getIceServers",
+    data: {
       ident: "hansent",
-      secret: "4c914424-c8e5-410c-87db-c62af2de9604",
+      secret: "5ce59fc8-8f88-4af0-96d9-64c263aecdbf",
       domain: "saskavi.com",
       application: "default",
       room: "default",
       secure: 1
     },
-    function(data, status) {
+    success: function(data, status) {
+      // data.d is where the iceServers object lives
       cb(null, data.d);
-      console.log("Data: " + data + "nnStatus: " + status);
-    });
+    },
+    async: false
+  });
+};
+
+
+
+var makePeer = function(name, config) {
+  var peer = window.peer = new Peer(name, {
+    host: 'p2p.saskavi.com',
+    port: 9000,
+    key: 'saskavi',
+    path: "/",
+    debug: 3,
+    config: config
+  });
+
+  return peer;
+};
+
+
+function getMediaStream(callback) {
+  navigator.getUserMedia = (navigator.getUserMedia ||
+    navigator.webkitGetUserMedia ||
+    navigator.mozGetUserMedia ||
+    navigator.msGetUserMedia);
+  if (navigator.getUserMedia) {
+    navigator.getUserMedia({
+        video: true,
+        audio: true
+      },
+      function(localMediaStream) {
+        callback(null, localMediaStream);
+      },
+      function(err) {
+        console.log("The following error occured: " + err);
+      }
+    );
+  } else {
+    console.log("getUserMedia not supported");
+  }
 }
 
 
 
-window.APP = new Vue({
-  el: "#app",
-  data: {
-    userid: window.location.search.substr(1),
-    channel: "channel",
-    connections: {},
-    userMediaConfig: {
-      audio: true,
-      video: true
-    },
-    rtcConfig: {}
+var Workspace = React.createClass({
+  getInitialState: function() {
+    return {
+      'localStream': null,
+      'streams': [],
+      'peer': null,
+      'conns': [],
+      'name': ''
+    };
   },
 
-  ready: function() {
-    //this.initEditor();
-    this.initUserMedia();
-
-    $("input").focus();
-
+  componentDidMount: function() {
     var self = this;
-    getIceServers(function(err, rtcConfig) {
-      self.rtcConfig = rtcConfig;
-      self.initConnection();
+    getNetConfig(function(err, config) {
+      getMediaStream(function(err, stream) {
+        var peer = makePeer(self.state.name, config);
+        window.peer = peer;
+        self.setState({
+          localStream: stream,
+          'peer': peer
+        });
+
+        peer.on('open', function(id) {
+          console.log(id);
+        });
+
+        peer.on('call', function(call) {
+          console.log("GOT CALL", call);
+          console.log("STREAM", stream);
+          call.answer(stream);
+          call.on('stream', function(s) {
+            console.log("GOT RESPONSE STREAM", s);
+            self.addStream(s);
+          });
+        });
+      });
     });
   },
 
-  methods: {
+  addStream: function(s) {
+    this.setState({
+      streams: this.state.streams.concat([s])
+    });
+  },
 
-    initEditor: function() {
-      this.editor = CodeMirror(this.$el, {
-        value: "console.log('hello world');}\n",
-        mode: "javascript",
-        theme: "base16-dark"
+  onKey: function(e) {
+    var k = e.keyCode || e.which;
+    if (k === 13) {
+      this.setState({
+        name: this.refs.name.getValue()
       });
-    },
+    }
+  },
 
-    initUserMedia: function(cb) {
-      // navigator.getUserMedia(this.userMediaConfig,
-      //   function(stream) {
-      //     this.localStream = stream;
-      //     $('.local-video').prop('src', URL.createObjectURL(stream));
-      //     if (cb)
-      //       cb(stream);
-      //   },
-      //   function(err) {
-      //     console.log("Error", err);
-      //   }
-      // );
+  onKeyWho: function(e) {
+    var k = e.keyCode || e.which;
+    var self = this;
 
-      navigator.getUserMedia({
-        video: true,
-        audio: true
-      }, function(localMediaStream) {
-        var video = document.querySelector('.local-video');
-        video.src = window.URL.createObjectURL(localMediaStream);
+    if (k === 13) {
+      var name = this.refs.name.getValue();
+      var call = this.state.peer.call(name, this.state.localStream);
 
-        // Note: onloadedmetadata doesn't fire in Chrome when using it with getUserMedia.
-        // See crbug.com/110938.
-        video.onloadedmetadata = function(e) {
-          // Ready to go. Do some stuff.
-        };
-      }, function(err) {
-        console.log(err);
+      call.on('stream', function(s) {
+        self.addStream(s);
       });
+    }
+  },
 
 
-    },
-
-    initConnection: function() {
-
-      var self = this;
-
-      console.log(this.uid, this.rtcConfig);
-      this.peer = new Peer(this.userid, {
-        host: 'p2p.saskavi.com',
-        port: 9000,
-        key: 'saskavi',
-        debug: 3,
-        config: this.rtcConfig
-      });
-
-      console.log("PEER:", this.peer);
-
-      this.peer.on('open', function() {
-        console.log("peer connection opened");
-      });
-
-      this.peer.on('call', function(call) {
-        console.log("incoming call", call);
-        call.answer(self.localStream);
-        call.on('stream', function(remoteStream) {
-          $('.remote-video').prop('src', URL.createObjectURL(remoteStream));
-        });
-      });
-
-      this.peer.on('error', function(err) {
-        alert(err.message);
-      });
-    },
-
-
-    startCall: function() {
-      var self = this;
-      var targetid = this.channel;
-
-      self.call = self.peer.call(targetid, self.localStream);
-      console.log("CALL", self.call);
-      self.call.on('stream', function(stream) {
-        $(self.$el).find('.remote-video').prop('src', URL.createObjectURL(stream));
-      });
-      self.call.on('close', function() {
-        console.log('call closed');
-      });
-
-      ;
-
-
+  render: function() {
+    if (this.state.localStream === 0) {
+      return (<h1>Initializing...</h1>);
     }
 
-  }
+    if (this.state.name.length === 0) {
+      return (
+        <Grid>
+                  <Row>
+                      <Col xs={6} xsOffset={3}>
+                          <Input type="text"
+                              ref="name"
+                              style={{marginTop: "50px", textAlign: 'center'}}
+                              onKeyPress={this.onKey}
+                              placeholder="what's your name?" className="form-control" autoFocus />
+                      </Col>
+                  </Row>
+              </Grid>
+      );
+    }
 
-})
+    var cameras = this.state.streams.map(function(s, i) {
+      return <Camera stream={s} offset={i} />;
+    });
+
+    return <div>
+          <Editor/>
+          { cameras }
+          <div className="call-who">
+              <Input type="text"
+                  ref="name"
+                  style={{marginTop: "10px", textAlign: 'center'}}
+                  onKeyPress={this.onKeyWho}
+                  placeholder="call who?" className="form-control" autoFocus />
+          </div>
+
+          <Camera stream={this.state.localStream} self={true} />
+      </div>;
+  }
+});
+
+React.renderComponent(<Workspace></Workspace>, document.body);
