@@ -1,58 +1,56 @@
 /** @jsx React.DOM */
 
-var request = require('superagent');
 var React = require('react');
-var CodeMirror = require('code-mirror/mode/htmlmixed');
-
 var RB = require('react-bootstrap');
 
-var Camera = require('./Camera');
+var Camera = require('./ui/camera');
+var Editor = require('./ui/editor');
 
 var Button = RB.Button,
-    Input = RB.Input,
-    Grid = RB.Grid,
-    Row = RB.Row,
-    Col = RB.Col;
+  Input = RB.Input,
+  Grid = RB.Grid,
+  Row = RB.Row,
+  Col = RB.Col;
 
 // Call XirSys ICE servers
 var $ = require('jquery');
 
 var getNetConfig = function(cb) {
-    $.ajax({
-        type: "POST",
-        dataType: "json",
-        url: "https://api.xirsys.com/getIceServers",
-        data: {
-            ident: "hansent",
-            secret: "5ce59fc8-8f88-4af0-96d9-64c263aecdbf",
-            domain: "saskavi.com",
-            application: "default",
-            room: "default",
-            secure: 1
-        },
-        success: function(data, status) {
-            // data.d is where the iceServers object lives
-            cb(null, data.d);
-        },
-        async: false
-    });
+  $.ajax({
+    type: "POST",
+    dataType: "json",
+    url: "https://api.xirsys.com/getIceServers",
+    data: {
+      ident: "hansent",
+      secret: "5ce59fc8-8f88-4af0-96d9-64c263aecdbf",
+      domain: "saskavi.com",
+      application: "default",
+      room: "default",
+      secure: 1
+    },
+    success: function(data, status) {
+      // data.d is where the iceServers object lives
+      cb(null, data.d);
+    },
+    async: false
+  });
 };
 
 
 
 var makePeer = function(name, config) {
-    console.log("Connecting with config:", config);
-    var peer = window.peer = new Peer(name, {
-        host: 'p2p.saskavi.com',
-        port: 9000,
-        key: 'saskavi',
-        path: "/",
-        debug: 3,
-        config: config
-    });
+  var peer = window.peer = new Peer(name, {
+    host: 'p2p.saskavi.com',
+    port: 9000,
+    key: 'saskavi',
+    path: "/",
+    debug: 3,
+    config: config
+  });
 
-    return peer;
+  return peer;
 };
+
 
 function getMediaStream(callback) {
   navigator.getUserMedia = (navigator.getUserMedia ||
@@ -78,102 +76,83 @@ function getMediaStream(callback) {
 
 
 
-var Editor = React.createClass({
+var Workspace = React.createClass({
   getInitialState: function() {
     return {
-      'value': 'print(hello world)',
-    }
+      'localStream': null,
+      'streams': [],
+      'peer': null,
+      'conns': [],
+      'name': ''
+    };
   },
 
   componentDidMount: function() {
-      var self = this;
+    var self = this;
+    getNetConfig(function(err, config) {
+      getMediaStream(function(err, stream) {
+        var peer = makePeer(self.state.name, config);
+        window.peer = peer;
+        self.setState({
+          localStream: stream,
+          'peer': peer
+        });
 
-      this.cm = CodeMirror(this.refs.editor.getDOMNode(), {
-          value: this.state.value
+        peer.on('open', function(id) {
+          console.log(id);
+        });
+
+        peer.on('call', function(call) {
+          console.log("GOT CALL", call);
+          console.log("STREAM", stream);
+          call.answer(stream);
+          call.on('stream', function(s) {
+            console.log("GOT RESPONSE STREAM", s);
+            self.addStream(s);
+          });
+        });
       });
-      this.cm.on("change", function(cm) {
-          self.setState({'value': cm.getValue()});
-      });
+    });
   },
 
-  render: function() {
-      return <div ref="editor" class="editor"></div> ;
-  }
-});
+  addStream: function(s) {
+    this.setState({
+      streams: this.state.streams.concat([s])
+    });
+  },
 
+  onKey: function(e) {
+    var k = e.keyCode || e.which;
+    if (k === 13) {
+      this.setState({
+        name: this.refs.name.getValue()
+      });
+    }
+  },
 
+  onKeyWho: function(e) {
+    var k = e.keyCode || e.which;
+    var self = this;
 
+    if (k === 13) {
+      var name = this.refs.name.getValue();
+      var call = this.state.peer.call(name, this.state.localStream);
 
-var Workspace = React.createClass({
-    getInitialState: function() {
-        return {
-            'localStream': null,
-            'streams': [],
-            'peer': null,
-            'conns': [],
-            'name': ''
-        };
-    },
-
-    componentDidMount: function() {
-        var self = this;
-        getNetConfig(function(err, config) {
-            getMediaStream(function(err, stream) {
-                var peer = makePeer(self.state.name, config);
-                window.peer = peer;
-                self.setState({localStream: stream, 'peer': peer});
-
-                peer.on('open', function(id) {
-                    console.log(id);
-                });
-
-                peer.on('call', function(call) {
-                    console.log("GOT CALL", call);
-                    console.log("STREAM", stream);
-                    call.answer(stream);
-                    call.on('stream', function(s) {
-                        console.log("GOT RESPONSE STREAM", s);
-                        self.addStream(s);
-                    });
-                });
-            });
-        });
-    },
-
-    addStream: function(s) {
-        this.setState({streams: this.state.streams.concat([s])});
-    },
-
-    onKey: function(e) {
-        var k = e.keyCode || e.which;
-        if (k === 13) {
-            this.setState({name: this.refs.name.getValue()});
-        }
-    },
-
-    onKeyWho: function(e) {
-        var k = e.keyCode || e.which;
-        var self = this;
-
-        if (k === 13) {
-            var name = this.refs.name.getValue();
-            var call = this.state.peer.call(name, this.state.localStream);
-
-            call.on('stream', function(s) {
-                self.addStream(s);
-            });
-        }
-    },
+      call.on('stream', function(s) {
+        self.addStream(s);
+      });
+    }
+  },
 
 
   render: function() {
-      if (this.state.localStream === 0) {
-          return ( <h1>Initializing...</h1> );
-      }
+    if (this.state.localStream === 0) {
+      return (<h1>Initializing...</h1>);
+    }
 
-      if (this.state.name.length === 0) {
-          return (
-              <Grid>
+    if (this.state.name.length === 0) {
+      return (
+        <Grid>
                   <Row>
                       <Col xs={6} xsOffset={3}>
                           <Input type="text"
@@ -184,14 +163,14 @@ var Workspace = React.createClass({
                       </Col>
                   </Row>
               </Grid>
-          );
-      }
+      );
+    }
 
-      var cameras = this.state.streams.map(function(s, i) {
-          return <Camera stream={s} offset={i} /> ;
-      });
+    var cameras = this.state.streams.map(function(s, i) {
+      return <Camera stream={s} offset={i} />;
+    });
 
-      return <div>
+    return <div>
           <Editor/>
           { cameras }
           <div className="call-who">
@@ -203,7 +182,7 @@ var Workspace = React.createClass({
           </div>
 
           <Camera stream={this.state.localStream} self={true} />
-      </div> ;
+      </div>;
   }
 });
 
